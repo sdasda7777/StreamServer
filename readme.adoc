@@ -7,13 +7,13 @@ image::https://github.com/sdasda7777/StreamServer/actions/workflows/rust.yml/bad
 
 == Structure
 
-Files are stored in a broadcast channel, where original a clone of the original receiver is always created, keeping the original pointing at the beginning of the file. Naturally, this method of storage is volatile and all data is wiped on program shutdown.
+Files are stored in a broadcast channel, and a clone of the original receiver is always created, keeping the original pointing at the beginning of the file. Naturally, this method of storage is volatile and all data is wiped on program shutdown.
 
 Using broadcast channel has the limitation that it imposes restriction on number of parts of the file. In the default configuration the program allocates space for 2^20 parts for each file (taking up about 24 MiB per file) and collects chunks of the body into parts of at least 1 MiB, theoretically limiting size of an individual file to around 1 TiB.
 
 == Development
 
-I originally tried implementing my own structure that would grow as necessary, and thus not have any file size limitations at all (it was based on singly linked list). While it initially seemed to work when testing with `producer.rs`/`consumer.rs`, during unit testing I noticed it had issues with synchronization, which I ultimately couldn't figure out how to fix.
+I originally tried implementing my own structure that would grow as necessary, and thus not have any file size limitations at all (it was initially based on array, later on singly linked list). While it initially seemed to work when testing with `producer.rs`/`consumer.rs`, during unit testing I noticed it had issues with synchronization, which I ultimately couldn't figure out how to fix, and even if I could, I wasn't confident I could test it properly.
 
 This lead me to turn to broadcast channels, more specifically the `async-broadcast` library which provides bounded broadcast channel. This library seems to be reasonably tested, well liked, frequently updated, and written only using safe Rust.
 
