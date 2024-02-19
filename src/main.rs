@@ -5,8 +5,9 @@
 #![warn(clippy::pedantic)]
 
 //! Simple file server written in (safe) Rust, which allows access to incomplete files, sending new bytes when they are received.
-//! For more information see `readme.adoc`
+//! For general information see `readme.adoc`
 
+use std::env;
 use axum::{
     body::Body,
     extract::{
@@ -35,18 +36,36 @@ use futures::stream::StreamExt;
 mod video_store;
 use crate::video_store::{VideoStore, Config};
 
+/// Find named argument, parse it to T
+fn find_parse<T: std::str::FromStr>(
+    args: &[String],
+    name: &str
+) -> Option<T> {
+    args.windows(2)
+        .find(|e| e[0] == name)
+        .and_then(|e| e[1].parse::<T>().ok())
+}
 
-/// CRUD stream server
+/// Main function reads command-line arguments,
+///   sets up routing and starts Axum server.
 #[tokio::main]
 async fn main() {
     
+    // Read command-line arguments
+    let args: Vec<_> = env::args().collect();
+    let file_allocated_blocks_no = find_parse(&args, "--file-allocated-blocks")
+                                            .unwrap_or(0x100_000);
+    let file_preferred_block_size = find_parse(&args, "--file-block-size")
+                                            .unwrap_or(0x100_000);
+    
     let video_store = VideoStore::new(
         Config {
-            file_allocated_blocks_no: 0x100_000,
-            file_preferred_block_size: 0x100_000,
+            file_allocated_blocks_no,
+            file_preferred_block_size,
         }
     );
     
+    // Set up routing
     let app = Router::new()
         .route("/", get(show_help_page))           // `GET /` is handled by `show_help_page`
         .route("/*path", get(get_stream)           // `GET` is handled by `get_stream`

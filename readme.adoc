@@ -19,9 +19,8 @@ This lead me to turn to broadcast channels, more specifically the `async-broadca
 
 == Running StreamServer
 
-Assuming `cargo` is installed on the system, server can be run using `cargo run --release --bin server`.
+Assuming `cargo` is installed on the system, server can be run using `cargo run --release --bin server`. For benchmark purposes, server accepts numeric arguments `--file-allocated-blocks` and `--file-block-size` which control number of blocks each file allocates and preferred size of a single block respectively. For example: `cargo run --release --bin server -- --file-allocated-blocks 8 --file-block-size 1024` allocates for each file 8 blocks and pushes a (non-last) block after it surpasses 1024 bytes. As mentioned, default value for both arguments is 2^20.
 
 Similarly producer and consumer can be run using `cargo run --release --bin producer` and `cargo run --release --bin consumer` respectively.
 
 Tests can be run using `cargo test`.
-
