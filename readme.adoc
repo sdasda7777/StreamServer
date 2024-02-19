@@ -3,6 +3,8 @@
 
 Simple file server written in (safe) Rust, which allows access to incomplete files, sending new bytes when they are received.
 
+image::https://github.com/sdasda7777/StreamServer/actions/workflows/rust.yml/badge.svg[]
+
 == Structure
 
 Files are stored in a broadcast channel, where original a clone of the original receiver is always created, keeping the original pointing at the beginning of the file. Naturally, this method of storage is volatile and all data is wiped on program shutdown.
