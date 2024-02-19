@@ -1,6 +1,8 @@
 
 #![deny(unsafe_code)]
+#![deny(clippy::all)]
 #![deny(clippy::missing_docs_in_private_items)]
+#![warn(clippy::pedantic)]
 
 //! Simple file server written in (safe) Rust, which allows access to incomplete files, sending new bytes when they are received.
 //! For more information see `readme.adoc`
@@ -31,7 +33,7 @@ use axum::{
 use futures::stream::StreamExt;
 
 mod video_store;
-use crate::video_store::{VideoStore, VideoStoreConfig};
+use crate::video_store::{VideoStore, Config};
 
 
 /// CRUD stream server
@@ -39,7 +41,7 @@ use crate::video_store::{VideoStore, VideoStoreConfig};
 async fn main() {
     
     let video_store = VideoStore::new(
-        VideoStoreConfig {
+        Config {
             file_allocated_blocks_no: 0x100_000,
             file_preferred_block_size: 0x100_000,
         }
@@ -98,13 +100,13 @@ async fn put_stream(
             Ok(bytes) => {
                 new_block.extend_from_slice(&bytes);
                 if new_block.len() >= preferred_block_size {
-                    write_handle.broadcast(new_block.to_vec()).await.unwrap();
+                    write_handle.broadcast(new_block.clone()).await.unwrap();
                     new_block = Vec::with_capacity(preferred_block_size);
                 }
             },
             Err(_err) => {
                 if !new_block.is_empty() {
-                    write_handle.broadcast(new_block.to_vec()).await.unwrap();
+                    write_handle.broadcast(new_block.clone()).await.unwrap();
                 }
                 write_handle.close();
                 // INFO: I'm really not sure what the correct behaviour should be in case of error
@@ -114,7 +116,7 @@ async fn put_stream(
         }
     }
     if !new_block.is_empty() {
-        write_handle.broadcast(new_block.to_vec()).await.unwrap();
+        write_handle.broadcast(new_block.clone()).await.unwrap();
     }
     write_handle.close();
     
@@ -145,7 +147,7 @@ async fn get_stream(
     }
 }
 
-/// Delete stored stream if present and return 204 (NO_CONTENT),
+/// Delete stored stream if present and return 204 (`NO_CONTENT`),
 //    otherwise return 404 (NOT_FOUND), as per DELETE's semantic.
 async fn delete_stream(
     State(video_store): State<VideoStore>,
@@ -154,7 +156,7 @@ async fn delete_stream(
     
     match video_store.remove(&path) {
         None => StatusCode::NOT_FOUND,
-        Some(_) => StatusCode::NO_CONTENT,
+        Some(()) => StatusCode::NO_CONTENT,
     }
 }
 
@@ -198,7 +200,7 @@ mod tests {
 #[tokio::test]
 async fn test_put_at_wildcard_400s() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -217,7 +219,7 @@ async fn test_put_at_wildcard_400s() {
 #[tokio::test]
 async fn test_put_without_content_type_400s() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -235,7 +237,7 @@ async fn test_put_without_content_type_400s() {
 #[tokio::test]
 async fn test_put_works() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -266,7 +268,7 @@ async fn test_put_works() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_put_is_immediately_readable() {
     
-    let video_store = VideoStore::new(VideoStoreConfig {
+    let video_store = VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     });
@@ -333,7 +335,7 @@ async fn test_put_is_immediately_readable() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_put_force_stream_sleep() {
     
-    let video_store = VideoStore::new(VideoStoreConfig {
+    let video_store = VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     });
@@ -415,7 +417,7 @@ async fn test_put_force_stream_sleep() {
 #[tokio::test]
 async fn test_get_nonexistent_404s() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -430,7 +432,7 @@ async fn test_get_nonexistent_404s() {
 #[tokio::test]
 async fn test_get_returns_completed_file() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -455,7 +457,7 @@ async fn test_get_returns_completed_file() {
 #[tokio::test(flavor = "multi_thread")]
 async fn test_get_returns_incomplete_file() {
     
-    let video_store = VideoStore::new(VideoStoreConfig {
+    let video_store = VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     });
@@ -503,7 +505,7 @@ async fn test_get_returns_incomplete_file() {
 #[tokio::test]
 async fn test_get_works_repeatedly() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -531,7 +533,7 @@ async fn test_get_works_repeatedly() {
 #[tokio::test]
 async fn test_delete_404s_when_not_found() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -546,7 +548,7 @@ async fn test_delete_404s_when_not_found() {
 #[tokio::test]
 async fn test_delete_deletes() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -568,7 +570,7 @@ async fn test_delete_deletes() {
 #[tokio::test]
 async fn test_list_400s_on_nonlast_wildcard() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -588,7 +590,7 @@ async fn test_list_400s_on_nonlast_wildcard() {
 #[tokio::test]
 async fn test_list_lists_all_prefix() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -625,7 +627,7 @@ async fn test_list_lists_all_prefix() {
 #[tokio::test]
 async fn test_list_lists_some_prefix() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -662,7 +664,7 @@ async fn test_list_lists_some_prefix() {
 #[tokio::test]
 async fn test_list_lists_empty_prefix() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -699,7 +701,7 @@ async fn test_list_lists_empty_prefix() {
 #[tokio::test]
 async fn test_list_lists_one_exact() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));
@@ -736,7 +738,7 @@ async fn test_list_lists_one_exact() {
 #[tokio::test]
 async fn test_list_lists_empty_exact() {
     
-    let state = State(VideoStore::new(VideoStoreConfig {
+    let state = State(VideoStore::new(Config {
         file_allocated_blocks_no: 0x10,
         file_preferred_block_size: 0x10,
     }));

@@ -1,5 +1,5 @@
 
-//! This module provides VideoStorage and VideoFile.
+//! This module provides `VideoStorage` and `VideoFile`.
 
 use std::sync::Arc;
 use std::collections::HashMap;
@@ -9,7 +9,7 @@ use tst::TSTSet;
 
 use async_broadcast::{Sender, Receiver};
 
-/// VideoFile just stores the content type and original broadcast channel receiver.
+/// `VideoFile` just stores the content type and original broadcast channel receiver.
 pub struct VideoFile {
     /// MIME content type of the file, as received in the "Content-Type" header
     content_type: String,
@@ -43,7 +43,7 @@ impl VideoFile {
 }
 
 /// Type of reference to configuration
-type ConfigRef = Arc<RwLock<VideoStoreConfig>>;
+type ConfigRef = Arc<RwLock<Config>>;
 /// Type of reference to a video file
 type FileRef = Arc<VideoFile>;
 /// Type of reference to main data storage type
@@ -51,7 +51,7 @@ type StorageRef = Arc<RwLock<HashMap<String, FileRef>>>;
 /// Type of reference to listing data storage type
 type TrieRef = Arc<RwLock<TSTSet>>;
 
-/// VideoStorage uses HashMap for storing VideoFiles and a prefix tree for search in prefixes.
+/// `VideoStorage` uses `HashMap` for storing `VideoFile`s and a prefix tree for search in prefixes.
 #[derive(Clone)]
 pub struct VideoStore {
     /// Reference to the configuration
@@ -62,8 +62,8 @@ pub struct VideoStore {
     available_paths: TrieRef,
 }
 
-/// VideoStoreConfig contains server configuration
-pub struct VideoStoreConfig {
+/// `VideoStoreConfig` contains server configuration
+pub struct Config {
     /// Number of blocks that should be allocated in a file
     pub file_allocated_blocks_no: usize,
     /// Preferred size of a block
@@ -71,11 +71,11 @@ pub struct VideoStoreConfig {
     pub file_preferred_block_size: usize,
 }
 
-/// VideoStore abstracts file creation, storage, deletion and search,
+/// `VideoStore` abstracts file creation, storage, deletion and search,
 ///   as well as runtime configuration.
 impl VideoStore {
-    /// Associated function for used to create a new VideoStore
-    pub fn new(config: VideoStoreConfig) -> Self {
+    /// Associated function for used to create a new `VideoStore`
+    pub fn new(config: Config) -> Self {
         Self {
             config: Arc::new(RwLock::new(config)),
             data_storage: Arc::new(RwLock::new(HashMap::new())),
@@ -84,7 +84,7 @@ impl VideoStore {
     }
     
     /// Method for obtaining a read guard of the configuration object.
-    pub fn config(&self) -> impl core::ops::Deref<Target=VideoStoreConfig> + '_ {
+    pub fn config(&self) -> impl core::ops::Deref<Target=Config> + '_ {
         self.config.read()
     }
     
