@@ -106,7 +106,7 @@ async fn put_stream(
     let write_handle = match content_type {
         None => return StatusCode::BAD_REQUEST, // must have content type header!
         Some(content_type) => {
-            video_store.create(path, content_type.to_string())
+            video_store.create(path.clone(), content_type.to_string())
         }
     };
     
@@ -114,29 +114,36 @@ async fn put_stream(
     let preferred_block_size = video_store.config().file_preferred_block_size;
     let mut stream = body.into_data_stream();
     let mut new_block = Vec::with_capacity(preferred_block_size);
+    
+    /// flush `new_block` if condition holds, then do something
+    macro_rules! flush_if_then { ($cond:expr, $then:block) => {
+        if $cond {
+            if write_handle.try_broadcast(new_block).is_err() {
+                write_handle.close();
+                delete_stream(State(video_store), Path(path)).await;
+                return StatusCode::PAYLOAD_TOO_LARGE;
+            }
+            $then
+        }
+    }}
+    
     while let Some(polled) = stream.next().await {
         match polled {
             Ok(bytes) => {
                 new_block.extend_from_slice(&bytes);
-                if new_block.len() >= preferred_block_size {
-                    write_handle.broadcast(new_block.clone()).await.unwrap();
-                    new_block = Vec::with_capacity(preferred_block_size);
-                }
+                flush_if_then!(new_block.len() >= preferred_block_size,
+                    {new_block = Vec::with_capacity(preferred_block_size);});
             },
             Err(_err) => {
-                if !new_block.is_empty() {
-                    write_handle.broadcast(new_block.clone()).await.unwrap();
-                }
+                flush_if_then!(!new_block.is_empty(), {});
                 write_handle.close();
-                // INFO: I'm really not sure what the correct behaviour should be in case of error
+                // INFO: I'm really not sure what the correct behaviour should be in case of transfer error
                 // delete_stream(State(video_store), Path(path));
                 return StatusCode::BAD_REQUEST;
             },
         }
     }
-    if !new_block.is_empty() {
-        write_handle.broadcast(new_block.clone()).await.unwrap();
-    }
+    flush_if_then!(!new_block.is_empty(), {});
     write_handle.close();
     
     StatusCode::CREATED
@@ -431,6 +438,26 @@ async fn test_put_force_stream_sleep() {
     let response = writer_thread.await.unwrap();
     assert_eq!(response.status(), StatusCode::CREATED);
     let _ = reader_thread.await.unwrap();
+}
+
+#[tokio::test]
+async fn test_put_too_large_fails() {
+    let state = State(VideoStore::new(Config {
+        file_allocated_blocks_no: 0x02,
+        file_preferred_block_size: 0x05,
+    }));
+    let path = Path("valid_path".into());
+    let mut headers = HeaderMap::new();
+    headers.insert(header::CONTENT_TYPE, "text/plain".parse().unwrap());
+    let body = Body::from_stream(futures::stream::iter(
+                    "The quick brown fox jumps over the lazy dog"
+                    .split(" ").map(Ok::<&str, std::io::Error>)));
+    
+    let response = put_stream(state.clone(), path, headers, body).await.into_response();
+    
+    // Test that too large PUT request returns `PAYLOAD_TOO_LARGE`
+    assert_eq!(response.status(), StatusCode::PAYLOAD_TOO_LARGE);
+    assert!(state.get("valid_path").is_none());
 }
 
 #[tokio::test]
